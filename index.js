@@ -2,16 +2,20 @@ const express = require('express');
 const app = express();
 
 const bodyParser = require('body-parser');
+const cors = require('cors');
 const morgan = require('morgan');
 const moment = require('moment');
 const uuid = require('uuid');
+
 let persons = require('./persons');
 
 morgan.token('body', (req, res) => {
     return JSON.stringify(req.body);
 });
 
+app.use(express.static('build'));
 app.use(bodyParser.json());
+app.use(cors());
 app.use(morgan(':method :url :status :response-time ms :body'));
 
 app.get('/api/persons', (req, res) => {
@@ -72,6 +76,7 @@ app.get('/info', (req, res) => {
     );
 });
 
-app.listen(5000, () => {
-    console.log('Server running on port 5000');
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
