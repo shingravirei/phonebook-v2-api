@@ -5,9 +5,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const morgan = require('morgan');
 const moment = require('moment');
-const uuid = require('uuid');
-
-let persons = require('./persons');
+const Person = require('./models/person');
 
 morgan.token('body', (req, res) => {
     return JSON.stringify(req.body);
@@ -18,53 +16,105 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(morgan(':method :url :status :response-time ms :body'));
 
-app.get('/api/persons', (req, res) => {
-    res.json(persons);
+app.get('/api/persons', async (req, res) => {
+    Person.find({})
+        .then(persons => {
+            res.json(persons.map(person => person.toJSON()));
+        })
+        .catch(err => {
+            console.log(err);
+            res.statusCode(400).end();
+        });
 });
 
-app.post('/api/persons', (req, res) => {
-    const body = req.body;
+app.post('/api/persons', async (req, res) => {
+    const { name, number } = req.body;
 
-    if (!body.name || !body.number) {
+    if (!name || !number) {
         return res.status(400).json({
             error: 'content missing'
         });
     }
 
-    const duplicatedPerson = persons.filter(
-        person => person.name.toLowerCase() === body.name.toLowerCase()
-    );
+    Person.find({}).then(persons => {
+        const person = persons.filter(
+            person => person.name.toLowerCase() === name.toLowerCase()
+        );
 
-    if (duplicatedPerson.length > 0) {
-        return res.status(400).json({
-            error: 'name must be unique'
+        if (person.length > 0) {
+            res.status(404).json({ error: 'Person already in the db' });
+        } else {
+            const person = new Person({
+                name,
+                number,
+                date: moment().valueOf()
+            });
+
+            person
+                .save()
+                .then(savedPerson => {
+                    console.log('person saved');
+                    res.json(savedPerson.toJSON());
+                })
+                .catch(err => {
+                    console.log(err);
+                    res.status(400).end();
+                });
+        }
+    });
+
+    // creating a new person and saving it to the db
+});
+
+app.get('/api/persons/:id', async (req, res) => {
+    const { id } = req.params;
+
+    Person.findById({ _id: id })
+        .then(person => {
+            if (person) {
+                res.json(person);
+            } else {
+                res.status(404).end();
+            }
+        })
+        .catch(err => {
+            console.log(err);
+            res.status(400).send({ error: 'wrong id type.' });
         });
-    }
-
-    const person = { ...body, id: uuid(), time: moment().valueOf() };
-
-    persons = persons.concat(person);
-
-    res.json(person);
 });
 
-app.get('/api/persons/:id', (req, res) => {
-    const id = Number(req.params.id);
-    const person = persons.find(person => person.id === id);
+app.delete('/api/persons/:id', async (req, res) => {
+    const { id } = req.params;
 
-    if (person) {
-        res.json(person);
-    } else {
-        res.status(404).end();
-    }
+    Person.findByIdAndDelete({ _id: id })
+        .then(() => {
+            console.log('Person removed from list');
+            res.status(204).end();
+        })
+        .catch(err => {
+            console.log(err);
+            res.status(400).end();
+        });
 });
 
-app.delete('/api/persons/:id', (req, res) => {
-    const id = Number(req.params.id);
+app.put('/api/persons/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, number } = req.body;
 
-    persons = persons.filter(person => person.id !== id);
+    const person = {
+        name,
+        number
+    };
 
-    res.status(204).end();
+    Person.findByIdAndUpdate(id, person, { new: true })
+        .then(updatedPerson => {
+            console.log('Person updated');
+            res.json(updatedPerson.toJSON());
+        })
+        .catch(err => {
+            console.log(err);
+            res.status(400).end();
+        });
 });
 
 app.get('/info', (req, res) => {
@@ -77,6 +127,7 @@ app.get('/info', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
