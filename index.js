@@ -17,84 +17,61 @@ app.use(cors());
 app.use(morgan(':method :url :status :response-time ms :body'));
 
 app.get('/api/persons', async (req, res) => {
-    Person.find({})
-        .then(persons => {
-            res.json(persons.map(person => person.toJSON()));
-        })
-        .catch(err => {
-            console.log(err);
-            res.statusCode(400).end();
-        });
+    try {
+        const persons = await Person.find({});
+
+        res.json(persons.map(person => person.toJSON()));
+    } catch (err) {
+        res.status(400).send({ error: err.message });
+    }
 });
 
 app.post('/api/persons', async (req, res) => {
     const { name, number } = req.body;
 
     if (!name || !number) {
-        return res.status(400).json({
-            error: 'content missing'
-        });
+        throw new Error('name and/or number missing');
     }
 
-    Person.find({}).then(persons => {
-        const person = persons.filter(
-            person => person.name.toLowerCase() === name.toLowerCase()
-        );
+    try {
+        const person = new Person({
+            name,
+            number,
+            date: moment().valueOf()
+        });
 
-        if (person.length > 0) {
-            res.status(404).json({ error: 'Person already in the db' });
-        } else {
-            const person = new Person({
-                name,
-                number,
-                date: moment().valueOf()
-            });
+        const result = await person.save();
 
-            person
-                .save()
-                .then(savedPerson => {
-                    console.log('person saved');
-                    res.json(savedPerson.toJSON());
-                })
-                .catch(err => {
-                    console.log(err);
-                    res.status(400).end();
-                });
-        }
-    });
-
-    // creating a new person and saving it to the db
+        res.json(result);
+    } catch (err) {
+        res.status(400).send({ error: err.message });
+    }
 });
 
 app.get('/api/persons/:id', async (req, res) => {
     const { id } = req.params;
 
-    Person.findById({ _id: id })
-        .then(person => {
-            if (person) {
-                res.json(person);
-            } else {
-                res.status(404).end();
-            }
-        })
-        .catch(err => {
-            console.log(err);
-            res.status(400).send({ error: 'wrong id type.' });
-        });
+    try {
+        const person = await Person.findById({ _id: id });
+
+        res.json(person);
+    } catch (err) {
+        res.status(400).send({ error: 'Person not found' });
+    }
 });
 
 app.delete('/api/persons/:id', async (req, res) => {
     const { id } = req.params;
 
-    Person.findByIdAndDelete({ _id: id })
-        .then(() => {
-            console.log('Person removed from list');
-            res.status(204).end();
-        })
-        .catch(err => {
-            console.log(err);
-            res.status(400).end();
+    try {
+        await Person.findByIdAndDelete({ _id: id });
+
+        res.status(204).end();
+    } catch (err) {
+        res.status(400).send({
+            error: 'Person not found, thus it was not deleted from db'
         });
+    }
 });
 
 app.put('/api/persons/:id', async (req, res) => {
@@ -106,15 +83,15 @@ app.put('/api/persons/:id', async (req, res) => {
         number
     };
 
-    Person.findByIdAndUpdate(id, person, { new: true })
-        .then(updatedPerson => {
-            console.log('Person updated');
-            res.json(updatedPerson.toJSON());
-        })
-        .catch(err => {
-            console.log(err);
-            res.status(400).end();
+    try {
+        const updatedPerson = await Person.findByIdAndUpdate(id, person, {
+            new: true
         });
+
+        res.json({ updatedPerson });
+    } catch (err) {
+        res.status(400).end();
+    }
 });
 
 app.get('/info', (req, res) => {
